@@ -1,0 +1,1356 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Hệ Thống Quản Lý & Bóc Tách Văn Bản Đến - Đi Thông Minh</title>
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <!-- PDF.js: Đọc và giải mã file PDF -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+  <!-- JSZip: Đọc file Word .docx -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    ::-webkit-scrollbar { width: 6px; height: 6px; }
+    ::-webkit-scrollbar-track { background: #f1f5f9; }
+    ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 9999px; }
+    ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    .dragover { border-color: #2563eb !important; background-color: #eff6ff !important; transform: scale(1.01); }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-800 font-sans antialiased min-h-screen flex flex-col">
+
+  <!-- Header -->
+  <header class="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div class="flex justify-between items-center h-16">
+        
+        <!-- Logo & Title -->
+        <div class="flex items-center space-x-3 cursor-pointer" onclick="switchTab('all')">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white shadow-md shadow-blue-500/20">
+            <i class="fa-solid fa-folder-tree text-lg"></i>
+          </div>
+          <div>
+            <h1 class="text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-blue-700 to-indigo-700">
+              Văn Bản Số AI
+            </h1>
+            <p class="text-xs text-slate-500 font-medium">Bóc tách Thể thức Hành chính Nghị định 30/2020/NĐ-CP</p>
+          </div>
+        </div>
+
+        <!-- Global Search Bar -->
+        <div class="flex-1 max-w-lg mx-6 hidden md:block">
+          <div class="relative">
+            <span class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
+              <i class="fa-solid fa-magnifying-glass text-sm"></i>
+            </span>
+            <input type="text" id="globalSearchInput" placeholder="Tìm theo số hiệu, cơ quan, trích yếu, người ký..." 
+                   class="w-full pl-10 pr-4 py-2 bg-slate-100 hover:bg-slate-200/70 focus:bg-white border border-transparent focus:border-blue-500 rounded-xl text-sm transition-all outline-none">
+          </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="flex items-center space-x-2.5">
+          <!-- NÚT CHỌN FILE TỪ MÁY TRÊN HEADER -->
+          <button onclick="triggerFilePicker()" class="cursor-pointer inline-flex items-center px-3.5 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-bold rounded-xl border border-blue-200 transition-all shadow-sm">
+            <i class="fa-solid fa-folder-open text-amber-500 mr-2 text-sm"></i>
+            <span>Chọn file từ máy</span>
+          </button>
+
+          <!-- Nút Tiếp nhận văn bản mới (Mở Modal) -->
+          <button onclick="openUploadModal()" class="inline-flex items-center px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white text-xs font-semibold rounded-xl shadow-md shadow-blue-600/25 transition-all">
+            <i class="fa-solid fa-cloud-arrow-up mr-2"></i>
+            Tiếp nhận văn bản
+          </button>
+
+          <!-- Xuất Excel -->
+          <button onclick="exportCSV()" title="Xuất file CSV / Excel" class="p-2 text-slate-600 hover:text-blue-600 hover:bg-blue-50 rounded-xl border border-slate-200 transition-colors">
+            <i class="fa-solid fa-file-excel text-base text-emerald-600"></i>
+          </button>
+        </div>
+
+      </div>
+    </div>
+  </header>
+
+  <!-- Input file ẩn dùng chung trên toàn ứng dụng -->
+  <input type="file" id="universalFileInput" accept=".pdf,.docx,.doc,.txt" class="hidden" onchange="handleFileSelect(event)">
+
+  <!-- Main Layout -->
+  <div class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 flex flex-col md:flex-row gap-6">
+
+    <!-- Sidebar Navigation -->
+    <aside class="w-full md:w-64 shrink-0 space-y-4">
+      <div class="bg-white rounded-2xl p-3 border border-slate-200/80 shadow-sm space-y-1">
+        
+        <button onclick="switchTab('all')" id="nav-all" class="nav-btn w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-colors bg-blue-50 text-blue-700">
+          <div class="flex items-center space-x-3">
+            <i class="fa-solid fa-layer-group w-5 text-center text-blue-600"></i>
+            <span>Tất cả văn bản</span>
+          </div>
+          <span id="badge-all" class="bg-blue-200/60 text-blue-800 text-xs px-2 py-0.5 rounded-full font-semibold">0</span>
+        </button>
+
+        <button onclick="switchTab('den')" id="nav-den" class="nav-btn w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-colors text-slate-700 hover:bg-slate-100">
+          <div class="flex items-center space-x-3">
+            <i class="fa-solid fa-inbox w-5 text-center text-emerald-600"></i>
+            <span>Văn bản đến</span>
+          </div>
+          <span id="badge-den" class="bg-emerald-100 text-emerald-700 text-xs px-2 py-0.5 rounded-full font-semibold">0</span>
+        </button>
+
+        <button onclick="switchTab('di')" id="nav-di" class="nav-btn w-full flex items-center justify-between px-3.5 py-2.5 rounded-xl text-sm font-medium transition-colors text-slate-700 hover:bg-slate-100">
+          <div class="flex items-center space-x-3">
+            <i class="fa-solid fa-paper-plane w-5 text-center text-amber-600"></i>
+            <span>Văn bản đi</span>
+          </div>
+          <span id="badge-di" class="bg-amber-100 text-amber-700 text-xs px-2 py-0.5 rounded-full font-semibold">0</span>
+        </button>
+
+      </div>
+
+      <!-- Quick Stats Card -->
+      <div class="bg-gradient-to-br from-indigo-900 to-slate-900 text-white rounded-2xl p-4 shadow-sm relative overflow-hidden">
+        <div class="absolute -right-4 -bottom-4 w-24 h-24 bg-blue-500/10 rounded-full blur-xl pointer-events-none"></div>
+        <div class="flex items-center justify-between mb-3">
+          <span class="text-xs font-semibold uppercase tracking-wider text-indigo-300">Tình trạng xử lý</span>
+          <i class="fa-solid fa-chart-pie text-indigo-400"></i>
+        </div>
+        <div class="space-y-2.5">
+          <div class="flex justify-between items-center text-sm">
+            <span class="text-slate-300 flex items-center"><span class="w-2 h-2 rounded-full bg-amber-400 mr-2"></span>Chờ xử lý</span>
+            <span id="stat-pending" class="font-bold text-amber-400">0</span>
+          </div>
+          <div class="flex justify-between items-center text-sm">
+            <span class="text-slate-300 flex items-center"><span class="w-2 h-2 rounded-full bg-blue-400 mr-2"></span>Đang xử lý</span>
+            <span id="stat-processing" class="font-bold text-blue-400">0</span>
+          </div>
+          <div class="flex justify-between items-center text-sm">
+            <span class="text-slate-300 flex items-center"><span class="w-2 h-2 rounded-full bg-emerald-400 mr-2"></span>Hoàn thành</span>
+            <span id="stat-completed" class="font-bold text-emerald-400">0</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Samples Test Box -->
+      <div class="bg-blue-50/70 border border-blue-200/80 rounded-2xl p-4 text-xs text-blue-900 space-y-2.5">
+        <div class="font-bold flex items-center text-blue-800">
+          <i class="fa-solid fa-vial-circle-check text-blue-600 mr-1.5"></i>
+          Thử nhanh mẫu văn bản
+        </div>
+        <p class="text-slate-600 text-[11px] leading-relaxed">
+          Nhấp để thử bóc tách tự động:
+        </p>
+        <div class="space-y-1.5 pt-1">
+          <button onclick="loadSampleDoc('ubnd')" class="w-full text-left px-2.5 py-1.5 bg-white hover:bg-blue-100 rounded-lg border border-blue-200 text-blue-800 font-medium transition-colors flex items-center justify-between">
+            <span>📄 Công văn 125/UBND-VP</span>
+            <i class="fa-solid fa-arrow-right text-[10px] text-blue-400"></i>
+          </button>
+          <button onclick="loadSampleDoc('btttt')" class="w-full text-left px-2.5 py-1.5 bg-white hover:bg-blue-100 rounded-lg border border-blue-200 text-blue-800 font-medium transition-colors flex items-center justify-between">
+            <span>📜 Quyết định 45/QĐ-BTTTT</span>
+            <i class="fa-solid fa-arrow-right text-[10px] text-blue-400"></i>
+          </button>
+          <button onclick="loadSampleDoc('stc')" class="w-full text-left px-2.5 py-1.5 bg-white hover:bg-blue-100 rounded-lg border border-blue-200 text-blue-800 font-medium transition-colors flex items-center justify-between">
+            <span>📑 Tờ trình 89/TTr-STC</span>
+            <i class="fa-solid fa-arrow-right text-[10px] text-blue-400"></i>
+          </button>
+        </div>
+      </div>
+
+    </aside>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 min-w-0 space-y-5">
+
+      <!-- BANNER TIẾP NHẬN FILE & CHỌN FILE TỪ MÁY TÍNH -->
+      <div id="quickDropArea" 
+           ondragover="handleQuickDragOver(event)" 
+           ondragleave="handleQuickDragLeave(event)" 
+           ondrop="handleQuickFileDrop(event)"
+           class="border-2 border-dashed border-blue-300 hover:border-blue-500 bg-gradient-to-r from-blue-50/60 to-indigo-50/60 rounded-2xl p-5 text-center transition-all flex flex-col md:flex-row items-center justify-between gap-4 shadow-sm">
+        
+        <div class="flex items-center space-x-4 text-left">
+          <div class="w-12 h-12 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-md shadow-blue-500/20">
+            <i class="fa-solid fa-file-arrow-up text-xl"></i>
+          </div>
+          <div>
+            <div class="text-sm font-bold text-slate-800 flex items-center">
+              <span>Kéo thả file văn bản hoặc Chọn file từ máy tính</span>
+              <span class="ml-2 px-2 py-0.5 text-[10px] font-semibold bg-blue-100 text-blue-700 rounded-full">PDF, Word, TXT</span>
+            </div>
+            <div class="text-xs text-slate-500 mt-0.5">Hệ thống tự động đọc: <b>Số ký hiệu, Ngày ban hành, Cơ quan, Trích yếu, Người ký</b></div>
+          </div>
+        </div>
+
+        <div class="flex items-center space-x-2 shrink-0">
+          <button onclick="triggerFilePicker()" class="px-5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-md shadow-blue-500/20 transition-all flex items-center hover:scale-105 active:scale-95">
+            <i class="fa-solid fa-folder-open mr-2 text-sm text-amber-300"></i>
+            Chọn file từ máy tính
+          </button>
+
+          <button onclick="openUploadModal()" class="px-3.5 py-2.5 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-all">
+            Nhập tay
+          </button>
+        </div>
+
+      </div>
+
+      <!-- Filter & Controls Toolbar -->
+      <div class="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-sm flex flex-wrap gap-3 items-center justify-between">
+        <div class="flex flex-wrap items-center gap-2.5">
+          <!-- Filter Loại văn bản -->
+          <select id="filterType" onchange="loadDocuments()" class="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 outline-none focus:border-blue-500">
+            <option value="">Tất cả loại văn bản</option>
+            <option value="Công văn">Công văn</option>
+            <option value="Quyết định">Quyết định</option>
+            <option value="Nghị quyết">Nghị quyết</option>
+            <option value="Chỉ thị">Chỉ thị</option>
+            <option value="Thông báo">Thông báo</option>
+            <option value="Tờ trình">Tờ trình</option>
+            <option value="Kế hoạch">Kế hoạch</option>
+            <option value="Báo cáo">Báo cáo</option>
+            <option value="Hợp đồng">Hợp đồng</option>
+          </select>
+
+          <!-- Filter Trạng thái -->
+          <select id="filterStatus" onchange="loadDocuments()" class="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 outline-none focus:border-blue-500">
+            <option value="">Tất cả trạng thái</option>
+            <option value="pending">Chờ xử lý</option>
+            <option value="processing">Đang xử lý</option>
+            <option value="completed">Đã hoàn thành</option>
+          </select>
+
+          <!-- Khoảng ngày -->
+          <div class="flex items-center space-x-1.5 text-xs text-slate-500">
+            <input type="date" id="filterFromDate" onchange="loadDocuments()" class="px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 outline-none focus:border-blue-500">
+            <span>đến</span>
+            <input type="date" id="filterToDate" onchange="loadDocuments()" class="px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-slate-700 outline-none focus:border-blue-500">
+          </div>
+        </div>
+
+        <!-- Refresh button -->
+        <button onclick="resetFilters()" title="Làm mới bộ lọc" class="px-3 py-2 text-xs font-medium text-slate-600 hover:text-blue-600 hover:bg-slate-100 rounded-xl transition-colors">
+          <i class="fa-solid fa-arrows-rotate mr-1"></i> Đặt lại
+        </button>
+      </div>
+
+      <!-- Danh sách Văn bản (Table) -->
+      <div class="bg-white rounded-2xl border border-slate-200/80 shadow-sm overflow-hidden">
+        
+        <!-- Table Header Info -->
+        <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+          <div class="flex items-center space-x-2">
+            <h2 id="currentTabTitle" class="text-base font-bold text-slate-800">Tất cả văn bản</h2>
+            <span id="docCountBadge" class="text-xs font-medium text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full">0 văn bản</span>
+          </div>
+        </div>
+
+        <!-- Table Responsive -->
+        <div class="overflow-x-auto min-h-[300px]">
+          <table class="w-full text-left border-collapse">
+            <thead>
+              <tr class="bg-slate-50/80 border-b border-slate-200/80 text-[11px] font-semibold text-slate-500 uppercase tracking-wider">
+                <th class="py-3.5 px-4 w-12 text-center">STT</th>
+                <th class="py-3.5 px-4 w-28">Chiều</th>
+                <th class="py-3.5 px-4 w-36">Số / Ký hiệu</th>
+                <th class="py-3.5 px-4 w-28">Ngày ban hành</th>
+                <th class="py-3.5 px-4 w-44">Đơn vị ban hành</th>
+                <th class="py-3.5 px-4">Trích yếu nội dung</th>
+                <th class="py-3.5 px-4 w-32">Người ký</th>
+                <th class="py-3.5 px-4 w-28">Trạng thái</th>
+                <th class="py-3.5 px-4 w-24 text-center">Thao tác</th>
+              </tr>
+            </thead>
+            <tbody id="documentTableBody" class="divide-y divide-slate-100 text-sm">
+              <!-- Render by JS -->
+            </tbody>
+          </table>
+        </div>
+
+      </div>
+
+    </main>
+  </div>
+
+  <!-- ================= OVERLAY KÉO THẢ TOÀN MÀN HÌNH ================= -->
+  <div id="fullWindowDropzone" class="fixed inset-0 z-50 bg-blue-600/90 backdrop-blur-md flex flex-col items-center justify-center text-white hidden pointer-events-none transition-all">
+    <div class="p-10 border-4 border-dashed border-white rounded-3xl text-center max-w-lg mx-4">
+      <i class="fa-solid fa-cloud-arrow-up text-6xl mb-4 animate-bounce"></i>
+      <h3 class="text-2xl font-bold">Thả file văn bản vào đây</h3>
+      <p class="text-sm text-blue-100 mt-2">Hệ thống sẽ tự động bóc tách: Số hiệu, Ngày tháng, Đơn vị, Trích yếu và Người ký</p>
+    </div>
+  </div>
+
+  <!-- ================= MODAL: TIẾP NHẬN & BÓC TÁCH TỰ ĐỘNG ================= -->
+  <div id="uploadModal" class="fixed inset-0 z-50 hidden overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl shadow-2xl max-w-5xl w-full max-h-[95vh] flex flex-col overflow-hidden border border-slate-100">
+      
+      <!-- Modal Header -->
+      <div class="px-6 py-4 border-b border-slate-200 flex items-center justify-between bg-slate-50/80">
+        <div class="flex items-center space-x-3">
+          <div class="w-9 h-9 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center">
+            <i class="fa-solid fa-wand-magic-sparkles text-sm"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-bold text-slate-800">Tiếp nhận & Trích xuất Văn bản Tự động</h3>
+            <p class="text-xs text-slate-500">Tự động nhận diện theo chuẩn Thể thức Hành chính</p>
+          </div>
+        </div>
+        <button onclick="closeUploadModal()" class="text-slate-400 hover:text-slate-600 w-8 h-8 rounded-lg flex items-center justify-center hover:bg-slate-200 transition-colors">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <!-- Modal Body (Chia làm 2 cột: Form bóc tách và Khung xem trước text gốc) -->
+      <div class="p-6 overflow-y-auto flex-1 grid grid-cols-1 lg:grid-cols-12 gap-6">
+        
+        <!-- Cột Form nhập liệu (7/12) -->
+        <div class="lg:col-span-7 space-y-4">
+
+          <!-- Dropzone Box Trong Modal -->
+          <div id="modalDropzone" 
+               ondragover="handleDragOver(event)" 
+               ondragleave="handleDragLeave(event)" 
+               ondrop="handleFileDrop(event)"
+               class="border-2 border-dashed border-blue-400 bg-blue-50/30 hover:bg-blue-50/60 rounded-2xl p-4 text-center transition-all">
+            
+            <div id="dropzonePrompt" class="space-y-2">
+              <div class="w-10 h-10 mx-auto rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center text-lg shadow-inner">
+                <i class="fa-solid fa-cloud-arrow-up"></i>
+              </div>
+              
+              <div class="text-xs font-semibold text-slate-800">
+                Kéo thả file vào đây hoặc
+              </div>
+              
+              <button type="button" onclick="triggerFilePicker()" class="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-md transition-all">
+                <i class="fa-solid fa-folder-open mr-2 text-sm text-amber-300"></i>
+                Chọn file từ máy tính
+              </button>
+              <p class="text-[11px] text-slate-400">PDF, Word (.docx, .doc), Văn bản (.txt)</p>
+            </div>
+
+            <!-- Loading Spinner -->
+            <div id="dropzoneLoading" class="hidden py-4 space-y-2">
+              <div class="inline-block animate-spin rounded-full h-8 w-8 border-4 border-blue-600 border-t-transparent"></div>
+              <p class="text-xs font-bold text-blue-700" id="loadingStatusText">Đang đọc tài liệu...</p>
+            </div>
+
+            <!-- Trạng thái file đã tải lên thành công -->
+            <div id="dropzoneSuccess" class="hidden py-1 flex items-center justify-between text-emerald-700 bg-emerald-50 rounded-xl p-3 border border-emerald-200">
+              <div class="flex items-center space-x-2 text-left">
+                <i class="fa-solid fa-circle-check text-xl text-emerald-600"></i>
+                <div class="text-xs">
+                  <div class="font-bold text-slate-800 truncate max-w-[200px]" id="uploadedFileName">ten_file.pdf</div>
+                  <div class="text-emerald-600 text-[11px]" id="scanNoticeText">Đã bóc tách tự động!</div>
+                </div>
+              </div>
+              <button type="button" onclick="triggerFilePicker()" class="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 rounded-lg border border-slate-200 text-[11px] font-semibold transition-colors">
+                <i class="fa-solid fa-arrows-rotate mr-1"></i> Đổi file
+              </button>
+            </div>
+
+          </div>
+
+          <!-- Form Thông tin Bóc tách được -->
+          <form id="docForm" onsubmit="saveDocument(event)" class="space-y-3.5">
+            <input type="hidden" id="formFileName" name="file_name">
+            <input type="hidden" id="formFileSize" name="file_size">
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              
+              <!-- Chiều văn bản -->
+              <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">Chiều văn bản <span class="text-red-500">*</span></label>
+                <div class="grid grid-cols-2 gap-2">
+                  <label class="flex items-center justify-center p-2 rounded-xl border border-slate-200 text-xs font-semibold cursor-pointer has-[:checked]:bg-emerald-50 has-[:checked]:border-emerald-500 has-[:checked]:text-emerald-700 transition-colors">
+                    <input type="radio" name="direction" value="den" class="hidden" checked>
+                    <i class="fa-solid fa-inbox mr-1 text-emerald-600"></i> Văn bản Đến
+                  </label>
+                  <label class="flex items-center justify-center p-2 rounded-xl border border-slate-200 text-xs font-semibold cursor-pointer has-[:checked]:bg-amber-50 has-[:checked]:border-amber-500 has-[:checked]:text-amber-700 transition-colors">
+                    <input type="radio" name="direction" value="di" class="hidden">
+                    <i class="fa-solid fa-paper-plane mr-1 text-amber-600"></i> Văn bản Đi
+                  </label>
+                </div>
+              </div>
+
+              <!-- Loại văn bản -->
+              <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">Loại văn bản</label>
+                <select id="formDocType" name="doc_type" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-800 outline-none focus:border-blue-500">
+                  <option value="Công văn">Công văn</option>
+                  <option value="Quyết định">Quyết định</option>
+                  <option value="Nghị quyết">Nghị quyết</option>
+                  <option value="Chỉ thị">Chỉ thị</option>
+                  <option value="Thông báo">Thông báo</option>
+                  <option value="Tờ trình">Tờ trình</option>
+                  <option value="Kế hoạch">Kế hoạch</option>
+                  <option value="Báo cáo">Báo cáo</option>
+                  <option value="Hợp đồng">Hợp đồng</option>
+                  <option value="Biên bản">Biên bản</option>
+                  <option value="Giấy mời">Giấy mời</option>
+                  <option value="Khác">Khác</option>
+                </select>
+              </div>
+
+              <!-- Số / Ký hiệu -->
+              <div>
+                <div class="flex justify-between items-center mb-1">
+                  <label class="block text-xs font-semibold text-slate-700">Số / Ký hiệu <span class="text-red-500">*</span></label>
+                  <span class="text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.2 rounded font-medium">Tự động nhận diện</span>
+                </div>
+                <input type="text" id="formDocNumber" name="doc_number" required placeholder="Vd: 125/UBND-VP, 45/QĐ-BTTTT" 
+                       class="w-full px-3 py-2 bg-slate-50 border border-slate-200 focus:bg-white rounded-xl text-xs font-bold text-slate-900 outline-none focus:border-blue-500">
+              </div>
+
+              <!-- Ngày ban hành -->
+              <div>
+                <div class="flex justify-between items-center mb-1">
+                  <label class="block text-xs font-semibold text-slate-700">Ngày ban hành</label>
+                  <span class="text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.2 rounded font-medium">Tự động nhận diện</span>
+                </div>
+                <input type="date" id="formIssueDate" name="issue_date" 
+                       class="w-full px-3 py-2 bg-slate-50 border border-slate-200 focus:bg-white rounded-xl text-xs text-slate-900 outline-none focus:border-blue-500">
+              </div>
+
+              <!-- Cơ quan / Đơn vị ban hành -->
+              <div class="sm:col-span-2">
+                <div class="flex justify-between items-center mb-1">
+                  <label class="block text-xs font-semibold text-slate-700">Cơ quan / Đơn vị ban hành <span class="text-red-500">*</span></label>
+                  <span class="text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.2 rounded font-medium">Tự động nhận diện</span>
+                </div>
+                <input type="text" id="formIssuer" name="issuer" required placeholder="Vd: ỦY BAN NHÂN DÂN THÀNH PHỐ HÀ NỘI" 
+                       class="w-full px-3 py-2 bg-slate-50 border border-slate-200 focus:bg-white rounded-xl text-xs font-bold text-slate-900 outline-none focus:border-blue-500">
+              </div>
+
+              <!-- Trích yếu nội dung -->
+              <div class="sm:col-span-2">
+                <div class="flex justify-between items-center mb-1">
+                  <label class="block text-xs font-semibold text-slate-700">Trích yếu nội dung <span class="text-red-500">*</span></label>
+                  <span class="text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.2 rounded font-medium">Tự động nhận diện</span>
+                </div>
+                <textarea id="formExcerpt" name="excerpt" rows="3" required placeholder="V/v triển khai công tác chuyển đổi số năm 2024..." 
+                          class="w-full px-3 py-2 bg-slate-50 border border-slate-200 focus:bg-white rounded-xl text-xs font-medium text-slate-900 outline-none focus:border-blue-500"></textarea>
+              </div>
+
+              <!-- Người ký -->
+              <div class="sm:col-span-2">
+                <div class="flex justify-between items-center mb-1">
+                  <label class="block text-xs font-semibold text-slate-700">Người ký & Chức vụ</label>
+                  <span class="text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.2 rounded font-medium">Tự động nhận diện</span>
+                </div>
+                <input type="text" id="formSigner" name="signer" placeholder="Vd: Trần Sỹ Thanh - Chủ tịch" 
+                       class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 outline-none focus:border-blue-500">
+              </div>
+
+              <!-- Trạng thái xử lý -->
+              <div class="sm:col-span-2">
+                <label class="block text-xs font-semibold text-slate-700 mb-1">Trạng thái xử lý</label>
+                <select id="formStatus" name="status" class="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 outline-none focus:border-blue-500">
+                  <option value="pending">Chờ xử lý</option>
+                  <option value="processing">Đang xử lý</option>
+                  <option value="completed">Đã hoàn thành</option>
+                </select>
+              </div>
+
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="pt-3 border-t border-slate-200 flex items-center justify-end space-x-3">
+              <button type="button" onclick="closeUploadModal()" class="px-4 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-600 hover:bg-slate-100 transition-colors">
+                Hủy bỏ
+              </button>
+              <button type="submit" id="btnSaveDoc" class="px-5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold shadow-md shadow-blue-500/20 transition-all flex items-center">
+                <i class="fa-solid fa-floppy-disk mr-2"></i>
+                Lưu vào Sổ văn bản
+              </button>
+            </div>
+          </form>
+
+        </div>
+
+        <!-- Cột Xem trước nội dung văn bản gốc bóc tách được (5/12) -->
+        <div class="lg:col-span-5 flex flex-col bg-slate-100 rounded-2xl p-4 border border-slate-200 text-xs">
+          <div class="flex items-center justify-between pb-2 mb-2 border-b border-slate-200 font-bold text-slate-700">
+            <span class="flex items-center"><i class="fa-solid fa-file-lines text-blue-600 mr-2"></i>Nội dung văn bản quét được</span>
+            <span class="text-[10px] text-slate-400 font-normal">Đối chiếu văn bản gốc</span>
+          </div>
+          
+          <div id="textPreviewArea" class="flex-1 bg-white p-3 rounded-xl border border-slate-200/80 overflow-y-auto max-h-[440px] font-mono text-[11px] leading-relaxed text-slate-700 whitespace-pre-wrap select-text">
+            Chưa có nội dung. Vui lòng tải file PDF, Word (.docx) hoặc TXT lên.
+          </div>
+          
+          <div class="mt-2 p-2 bg-blue-50 rounded-xl border border-blue-200 text-[11px] text-blue-800">
+            <i class="fa-solid fa-circle-info mr-1 text-blue-600"></i>
+            <span>Bạn có thể bôi đen và sao chép bất kỳ đoạn chữ nào ở khung trên để dán vào các ô nếu muốn chỉnh sửa.</span>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ================= MODAL XEM TRƯỚC VĂN BẢN (PREVIEW MODAL) ================= -->
+  <div id="previewDocModal" class="fixed inset-0 z-50 hidden overflow-y-auto bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-white rounded-3xl shadow-2xl max-w-4xl w-full max-h-[90vh] flex flex-col overflow-hidden border border-slate-100">
+      <div class="px-6 py-3.5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+        <div class="flex items-center space-x-3">
+          <i class="fa-solid fa-file-pdf text-xl text-red-500"></i>
+          <div>
+            <h4 id="previewModalTitle" class="text-sm font-bold text-slate-800">Xem chi tiết văn bản</h4>
+            <p id="previewModalSub" class="text-xs text-slate-500">Số hiệu: ...</p>
+          </div>
+        </div>
+        <button onclick="closeDocPreviewModal()" class="w-8 h-8 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200 flex items-center justify-center transition-colors">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+      <div class="p-6 overflow-y-auto flex-1 space-y-4">
+        <div class="grid grid-cols-2 gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-200 text-xs">
+          <div><span class="text-slate-500">Số / Ký hiệu:</span> <b id="pvDocNumber" class="text-slate-900 ml-1"></b></div>
+          <div><span class="text-slate-500">Ngày ban hành:</span> <b id="pvIssueDate" class="text-slate-900 ml-1"></b></div>
+          <div class="col-span-2"><span class="text-slate-500">Cơ quan ban hành:</span> <b id="pvIssuer" class="text-slate-900 ml-1"></b></div>
+          <div class="col-span-2"><span class="text-slate-500">Trích yếu:</span> <span id="pvExcerpt" class="text-slate-900 font-medium ml-1"></span></div>
+          <div><span class="text-slate-500">Người ký:</span> <b id="pvSigner" class="text-slate-900 ml-1"></b></div>
+          <div><span class="text-slate-500">Loại văn bản:</span> <b id="pvDocType" class="text-slate-900 ml-1"></b></div>
+        </div>
+        <div>
+          <h5 class="text-xs font-bold text-slate-700 mb-1.5">Nội dung trích xuất:</h5>
+          <div id="pvRawText" class="bg-white p-4 rounded-xl border border-slate-200 max-h-[350px] overflow-y-auto font-mono text-[11px] leading-relaxed text-slate-700 whitespace-pre-wrap"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div id="toastMessage" class="fixed bottom-5 right-5 z-50 bg-slate-900 text-white px-4 py-3 rounded-2xl shadow-xl flex items-center space-x-3 hidden transition-all">
+    <div id="toastIcon"><i class="fa-solid fa-info-circle text-blue-400"></i></div>
+    <div id="toastText" class="text-xs font-medium">Thông báo</div>
+  </div>
+
+  <!-- JAVASCRIPT ENGINE CHUYÊN SÂU NGHỊ ĐỊNH 30/2020/NĐ-CP -->
+  <script>
+    // State
+    let currentTab = 'all';
+    let currentDocuments = [];
+    let fileBlobCache = {}; // Lưu blob URL để xem trước file
+
+    // Cấu hình PDF.js worker an toàn
+    if (window.pdfjsLib) {
+      try {
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      } catch(e) {}
+    }
+
+    // Các mẫu văn bản chuẩn
+    const SAMPLES = {
+      ubnd: {
+        doc_number: "125/UBND-VP",
+        issue_date: "2024-10-15",
+        issuer: "ỦY BAN NHÂN DÂN THÀNH PHỐ HÀ NỘI",
+        excerpt: "V/v triển khai công tác chuyển đổi số và số hóa hồ sơ lưu trữ năm 2024",
+        doc_type: "Công văn",
+        direction: "den",
+        signer: "Trần Sỹ Thanh - Chủ tịch",
+        status: "processing",
+        file_name: "Cong_van_125_UBND.txt",
+        raw_text: "ỦY BAN NHÂN DÂN THÀNH PHỐ HÀ NỘI\nSố: 125/UBND-VP\nHà Nội, ngày 15 tháng 10 năm 2024\n\nV/v triển khai công tác chuyển đổi số và số hóa hồ sơ lưu trữ năm 2024\n\nKính gửi: Các Sở, ban, ngành thành phố.\n\nTM. ỦY BAN NHÂN DÂN\nCHỦ TỊCH\nTrần Sỹ Thanh"
+      },
+      btttt: {
+        doc_number: "45/QĐ-BTTTT",
+        issue_date: "2024-11-20",
+        issuer: "BỘ THÔNG TIN VÀ TRUYỀN THÔNG",
+        excerpt: "Về việc ban hành Quy chế tiếp nhận, xử lý và quản lý văn bản điện tử",
+        doc_type: "Quyết định",
+        direction: "den",
+        signer: "Nguyễn Huy Dũng - Thứ trưởng",
+        status: "completed",
+        file_name: "Quyet_dinh_45_BTTTT.txt",
+        raw_text: "BỘ THÔNG TIN VÀ TRUYỀN THÔNG\nSố: 45/QĐ-BTTTT\nHà Nội, ngày 20 tháng 11 năm 2024\n\nQUYẾT ĐỊNH\nVề việc ban hành Quy chế tiếp nhận, xử lý và quản lý văn bản điện tử\n\nKT. BỘ TRƯỞNG\nTHỨ TRƯỞNG\nNguyễn Huy Dũng"
+      },
+      stc: {
+        doc_number: "89/TTr-STC",
+        issue_date: "2024-12-12",
+        issuer: "SỞ TÀI CHÍNH THÀNH PHỐ ĐÀ NẴNG",
+        excerpt: "V/v đề xuất kinh phí triển khai hệ thống lưu trữ số hóa văn bản điện tử năm 2025",
+        doc_type: "Tờ trình",
+        direction: "di",
+        signer: "Lê Văn B - Giám đốc",
+        status: "pending",
+        file_name: "To_trinh_89_STC.txt",
+        raw_text: "SỞ TÀI CHÍNH THÀNH PHỐ ĐÀ NẴNG\nSố: 89/TTr-STC\nĐà Nẵng, ngày 12 tháng 12 năm 2024\n\nTỜ TRÌNH\nVề việc phê duyệt dự toán kinh phí triển khai phần mềm quản lý văn bản số\n\nGIÁM ĐỐC\nLê Văn B"
+      }
+    };
+
+    // Khởi tạo
+    document.addEventListener('DOMContentLoaded', () => {
+      initStorage();
+      loadDocuments();
+      loadStatistics();
+      setupGlobalSearch();
+      setupWindowDragDrop();
+    });
+
+    function triggerFilePicker() {
+      const input = document.getElementById('universalFileInput');
+      input.value = '';
+      input.click();
+    }
+
+    function initStorage() {
+      const stored = localStorage.getItem('van_ban_docs');
+      if (stored) {
+        try { currentDocuments = JSON.parse(stored); } catch(e) { currentDocuments = []; }
+      }
+      if (!currentDocuments || currentDocuments.length === 0) {
+        currentDocuments = [
+          { id: 1, ...SAMPLES.ubnd },
+          { id: 2, ...SAMPLES.btttt },
+          { id: 3, ...SAMPLES.stc }
+        ];
+        saveToStorage();
+      }
+    }
+
+    function saveToStorage() {
+      localStorage.setItem('van_ban_docs', JSON.stringify(currentDocuments));
+    }
+
+    function setupWindowDragDrop() {
+      const fullOverlay = document.getElementById('fullWindowDropzone');
+      window.addEventListener('dragover', (e) => {
+        e.preventDefault(); e.stopPropagation();
+        fullOverlay.classList.remove('hidden');
+        fullOverlay.style.pointerEvents = 'auto';
+      });
+      fullOverlay.addEventListener('dragleave', (e) => {
+        e.preventDefault(); e.stopPropagation();
+        fullOverlay.classList.add('hidden');
+        fullOverlay.style.pointerEvents = 'none';
+      });
+      fullOverlay.addEventListener('drop', (e) => {
+        e.preventDefault(); e.stopPropagation();
+        fullOverlay.classList.add('hidden');
+        fullOverlay.style.pointerEvents = 'none';
+        if (e.dataTransfer && e.dataTransfer.files.length > 0) {
+          processSelectedFile(e.dataTransfer.files[0]);
+        }
+      });
+    }
+
+    function setupGlobalSearch() {
+      const searchInput = document.getElementById('globalSearchInput');
+      let timeout = null;
+      searchInput.addEventListener('input', () => {
+        clearTimeout(timeout);
+        timeout = setTimeout(loadDocuments, 300);
+      });
+    }
+
+    function switchTab(tab) {
+      currentTab = tab;
+      document.querySelectorAll('.nav-btn').forEach(btn => {
+        btn.classList.remove('bg-blue-50', 'text-blue-700', 'bg-emerald-50', 'text-emerald-700', 'bg-amber-50', 'text-amber-700');
+        btn.classList.add('text-slate-700');
+      });
+      const activeBtn = document.getElementById(`nav-${tab}`);
+      if (activeBtn) {
+        activeBtn.classList.remove('text-slate-700');
+        if (tab === 'all') activeBtn.classList.add('bg-blue-50', 'text-blue-700');
+        if (tab === 'den') activeBtn.classList.add('bg-emerald-50', 'text-emerald-700');
+        if (tab === 'di') activeBtn.classList.add('bg-amber-50', 'text-amber-700');
+      }
+      const titles = { 'all': 'Tất cả văn bản', 'den': 'Sổ Văn bản Đến', 'di': 'Sổ Văn bản Đi' };
+      document.getElementById('currentTabTitle').innerText = titles[tab] || 'Danh sách văn bản';
+      loadDocuments();
+    }
+
+    function loadDocuments() {
+      const keyword = document.getElementById('globalSearchInput').value.trim().toLowerCase();
+      const docType = document.getElementById('filterType').value;
+      const status = document.getElementById('filterStatus').value;
+      const fromDate = document.getElementById('filterFromDate').value;
+      const toDate = document.getElementById('filterToDate').value;
+
+      let filtered = [...currentDocuments];
+      if (currentTab !== 'all') filtered = filtered.filter(d => d.direction === currentTab);
+      if (docType) filtered = filtered.filter(d => d.doc_type === docType);
+      if (status) filtered = filtered.filter(d => d.status === status);
+      if (fromDate) filtered = filtered.filter(d => d.issue_date >= fromDate);
+      if (toDate) filtered = filtered.filter(d => d.issue_date <= toDate);
+      if (keyword) {
+        filtered = filtered.filter(d => 
+          (d.doc_number && d.doc_number.toLowerCase().includes(keyword)) ||
+          (d.issuer && d.issuer.toLowerCase().includes(keyword)) ||
+          (d.excerpt && d.excerpt.toLowerCase().includes(keyword)) ||
+          (d.signer && d.signer.toLowerCase().includes(keyword))
+        );
+      }
+      renderTable(filtered);
+      document.getElementById('docCountBadge').innerText = `${filtered.length} văn bản`;
+    }
+
+    function renderTable(documents) {
+      const tableBody = document.getElementById('documentTableBody');
+      if (!documents || documents.length === 0) {
+        tableBody.innerHTML = `
+          <tr>
+            <td colspan="9" class="py-16 text-center text-slate-400">
+              <div class="w-16 h-16 mx-auto mb-3 rounded-full bg-slate-100 flex items-center justify-center text-slate-300 text-2xl">
+                <i class="fa-regular fa-folder-open"></i>
+              </div>
+              <div class="text-sm font-semibold text-slate-600">Chưa có văn bản nào trong mục này</div>
+              <div class="text-xs text-slate-400 mt-1">Hãy bấm <b>"Chọn file từ máy"</b> hoặc kéo thả file vào đây</div>
+            </td>
+          </tr>
+        `;
+        return;
+      }
+
+      tableBody.innerHTML = documents.map((doc, idx) => {
+        const isDen = doc.direction === 'den';
+        const dirBadge = isDen 
+          ? `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-emerald-100 text-emerald-800 border border-emerald-200"><i class="fa-solid fa-arrow-down-left mr-1"></i>Đến</span>`
+          : `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold bg-amber-100 text-amber-800 border border-amber-200"><i class="fa-solid fa-arrow-up-right mr-1"></i>Đi</span>`;
+
+        const statusBadge = {
+          'pending': `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200"><span class="w-1.5 h-1.5 rounded-full bg-amber-500 mr-1.5"></span>Chờ xử lý</span>`,
+          'processing': `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-blue-50 text-blue-700 border border-blue-200"><span class="w-1.5 h-1.5 rounded-full bg-blue-500 mr-1.5"></span>Đang xử lý</span>`,
+          'completed': `<span class="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200"><span class="w-1.5 h-1.5 rounded-full bg-emerald-500 mr-1.5"></span>Hoàn thành</span>`
+        }[doc.status] || `<span class="text-xs text-slate-500">${doc.status}</span>`;
+
+        return `
+          <tr class="hover:bg-blue-50/40 transition-colors">
+            <td class="py-3 px-4 text-center text-xs text-slate-400 font-medium">${idx + 1}</td>
+            <td class="py-3 px-4">${dirBadge}</td>
+            <td class="py-3 px-4">
+              <div class="font-bold text-slate-900 text-xs">${escapeHtml(doc.doc_number || "Chưa có số")}</div>
+              <span class="inline-block text-[10px] text-slate-500 bg-slate-100 px-1.5 py-0.2 rounded mt-0.5">${escapeHtml(doc.doc_type || "Công văn")}</span>
+            </td>
+            <td class="py-3 px-4 text-xs text-slate-600 whitespace-nowrap">
+              ${doc.issue_date ? formatDate(doc.issue_date) : "<span class='text-slate-400 italic'>Chưa rõ</span>"}
+            </td>
+            <td class="py-3 px-4 text-xs font-semibold text-slate-800">
+              <div class="line-clamp-2" title="${escapeHtml(doc.issuer)}">${escapeHtml(doc.issuer || "Chưa rõ cơ quan")}</div>
+            </td>
+            <td class="py-3 px-4 text-xs text-slate-700">
+              <div class="line-clamp-2" title="${escapeHtml(doc.excerpt)}">${escapeHtml(doc.excerpt || "Không có trích yếu")}</div>
+            </td>
+            <td class="py-3 px-4 text-xs font-medium text-slate-700 whitespace-nowrap">
+              ${doc.signer ? `<div class="flex items-center"><i class="fa-solid fa-signature text-blue-500 mr-1.5 text-[10px]"></i>${escapeHtml(doc.signer)}</div>` : `<span class="text-slate-300 italic text-[11px]">Chưa rõ</span>`}
+            </td>
+            <td class="py-3 px-4">${statusBadge}</td>
+            <td class="py-3 px-4 text-center">
+              <div class="flex items-center justify-center space-x-1">
+                <button onclick="previewSavedDocument(${doc.id})" title="Xem chi tiết văn bản" class="p-1.5 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors">
+                  <i class="fa-solid fa-eye text-xs"></i>
+                </button>
+                <button onclick="deleteDocPrompt(${doc.id}, '${escapeHtml(doc.doc_number)}')" title="Xóa văn bản" class="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
+                  <i class="fa-solid fa-trash-can text-xs"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+        `;
+      }).join('');
+    }
+
+    function loadStatistics() {
+      const total = currentDocuments.length;
+      const den = currentDocuments.filter(d => d.direction === 'den').length;
+      const di = currentDocuments.filter(d => d.direction === 'di').length;
+      const pending = currentDocuments.filter(d => d.status === 'pending').length;
+      const proc = currentDocuments.filter(d => d.status === 'processing').length;
+      const comp = currentDocuments.filter(d => d.status === 'completed').length;
+
+      document.getElementById('badge-all').innerText = total;
+      document.getElementById('badge-den').innerText = den;
+      document.getElementById('badge-di').innerText = di;
+      document.getElementById('stat-pending').innerText = pending;
+      document.getElementById('stat-processing').innerText = proc;
+      document.getElementById('stat-completed').innerText = comp;
+    }
+
+    function resetFilters() {
+      document.getElementById('filterType').value = '';
+      document.getElementById('filterStatus').value = '';
+      document.getElementById('filterFromDate').value = '';
+      document.getElementById('filterToDate').value = '';
+      document.getElementById('globalSearchInput').value = '';
+      loadDocuments();
+    }
+
+    function openUploadModal() {
+      document.getElementById('uploadModal').classList.remove('hidden');
+      resetUploadState();
+    }
+
+    function closeUploadModal() {
+      document.getElementById('uploadModal').classList.add('hidden');
+    }
+
+    function resetUploadState() {
+      document.getElementById('dropzonePrompt').classList.remove('hidden');
+      document.getElementById('dropzoneLoading').classList.add('hidden');
+      document.getElementById('dropzoneSuccess').classList.add('hidden');
+      document.getElementById('docForm').reset();
+      document.getElementById('universalFileInput').value = '';
+      document.getElementById('formFileName').value = '';
+      document.getElementById('formFileSize').value = '';
+      document.getElementById('formIssueDate').value = new Date().toISOString().split('T')[0];
+      document.getElementById('textPreviewArea').innerText = 'Chưa có nội dung. Vui lòng tải file PDF, Word (.docx, .doc) hoặc TXT lên.';
+    }
+
+    function handleQuickDragOver(e) { e.preventDefault(); e.stopPropagation(); document.getElementById('quickDropArea').classList.add('border-blue-600', 'bg-blue-100/50'); }
+    function handleQuickDragLeave(e) { e.preventDefault(); e.stopPropagation(); document.getElementById('quickDropArea').classList.remove('border-blue-600', 'bg-blue-100/50'); }
+    function handleQuickFileDrop(e) {
+      e.preventDefault(); e.stopPropagation();
+      document.getElementById('quickDropArea').classList.remove('border-blue-600', 'bg-blue-100/50');
+      if (e.dataTransfer && e.dataTransfer.files.length > 0) {
+        processSelectedFile(e.dataTransfer.files[0]);
+      }
+    }
+
+    function handleDragOver(e) { e.preventDefault(); e.stopPropagation(); document.getElementById('modalDropzone').classList.add('dragover'); }
+    function handleDragLeave(e) { e.preventDefault(); e.stopPropagation(); document.getElementById('modalDropzone').classList.remove('dragover'); }
+    function handleFileDrop(e) {
+      e.preventDefault(); e.stopPropagation();
+      document.getElementById('modalDropzone').classList.remove('dragover');
+      if (e.dataTransfer && e.dataTransfer.files.length > 0) {
+        processSelectedFile(e.dataTransfer.files[0]);
+      }
+    }
+
+    function handleFileSelect(e) {
+      if (e.target.files && e.target.files.length > 0) {
+        processSelectedFile(e.target.files[0]);
+      }
+    }
+
+    // ================= XỬ LÝ ĐỌC FILE & BÓC TÁCH CHUYÊN SÂU =================
+    async function processSelectedFile(file) {
+      if (!file) return;
+
+      openUploadModal();
+      document.getElementById('dropzonePrompt').classList.add('hidden');
+      document.getElementById('dropzoneSuccess').classList.add('hidden');
+      document.getElementById('dropzoneLoading').classList.remove('hidden');
+      document.getElementById('loadingStatusText').innerText = `Đang đọc tệp: ${file.name}...`;
+
+      showToast(`Đang đọc tệp: ${file.name}...`, 'info');
+
+      try {
+        const text = await extractTextFromFile(file);
+
+        // Kiểm tra nếu là file scan không có text
+        if (!text || text.trim().length === 0) {
+          document.getElementById('scanNoticeText').innerText = "⚠️ Tệp Scan ảnh (không có text điện tử)";
+          document.getElementById('textPreviewArea').innerText = `[THÔNG BÁO TỆP SCAN DẠNG HÌNH ẢNH]\nTệp "${file.name}" không chứa lớp chữ text điện tử (thường là văn bản scan từ máy scan hoặc chụp ảnh).\n\nHệ thống đã tự động lấy số hiệu từ tên file. Bạn vui lòng xem hình ảnh văn bản và nhập nhanh vào các ô bên cạnh.`;
+        } else {
+          document.getElementById('scanNoticeText').innerText = "Bóc tách thành công!";
+          document.getElementById('textPreviewArea').innerText = text;
+        }
+
+        // Bóc tách theo chuẩn Nghị định 30/2020/NĐ-CP
+        const info = parseVietnameseDocStrict(text, file.name);
+
+        document.getElementById('dropzoneLoading').classList.add('hidden');
+        document.getElementById('dropzoneSuccess').classList.remove('hidden');
+        document.getElementById('uploadedFileName').innerText = file.name;
+
+        document.getElementById('formFileName').value = file.name;
+        document.getElementById('formFileSize').value = file.size;
+
+        if (info.doc_number) document.getElementById('formDocNumber').value = info.doc_number;
+        if (info.issue_date) document.getElementById('formIssueDate').value = info.issue_date;
+        if (info.issuer) document.getElementById('formIssuer').value = info.issuer;
+        if (info.excerpt) document.getElementById('formExcerpt').value = info.excerpt;
+        if (info.doc_type) document.getElementById('formDocType').value = info.doc_type;
+        if (info.signer) document.getElementById('formSigner').value = info.signer;
+
+        const rad = document.querySelector(`input[name="direction"][value="${info.direction}"]`);
+        if (rad) rad.checked = true;
+
+        showToast(`Đã nhận diện: ${info.doc_number || "Số hiệu"} - ${info.issuer || "Cơ quan"}!`, 'success');
+      } catch (err) {
+        console.error("Lỗi khi đọc file:", err);
+        document.getElementById('dropzoneLoading').classList.add('hidden');
+        document.getElementById('dropzoneSuccess').classList.remove('hidden');
+        document.getElementById('uploadedFileName').innerText = file.name;
+        document.getElementById('textPreviewArea').innerText = `Lỗi đọc cấu trúc tệp: ${err.message}\nBạn vẫn có thể điền thông tin và lưu vào sổ văn bản.`;
+        showToast("Đã tải tệp lên. Vui lòng kiểm tra lại thông tin.", 'info');
+      }
+    }
+
+    // Trích xuất text an toàn từ mọi loại file
+    async function extractTextFromFile(file) {
+      const ext = file.name.split('.').pop().toLowerCase();
+
+      // 1. File văn bản TXT
+      if (ext === 'txt') {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = (e) => resolve(e.target.result || "");
+          reader.onerror = (e) => reject(e);
+          reader.readAsText(file, "UTF-8");
+        });
+      }
+
+      // 2. File PDF: Dùng PDF.js với fallback an toàn
+      if (ext === 'pdf') {
+        if (!window.pdfjsLib) {
+          throw new Error("Thư viện PDF.js chưa tải xong. Vui lòng kiểm tra kết nối mạng.");
+        }
+
+        const arrayBuffer = await file.arrayBuffer();
+        let loadingTask;
+
+        try {
+          // Thử nạp chuẩn
+          loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+        } catch(e) {
+          // Fallback không dùng worker
+          loadingTask = pdfjsLib.getDocument({ data: arrayBuffer, disableWorker: true });
+        }
+
+        const pdf = await loadingTask.promise;
+        let allLines = [];
+        const maxPages = Math.min(pdf.numPages, 6);
+
+        for (let i = 1; i <= maxPages; i++) {
+          const page = await pdf.getPage(i);
+          const content = await page.getTextContent();
+          const items = content.items || [];
+          if (items.length === 0) continue;
+
+          // Sắp xếp theo Y giảm dần (trên xuống dưới), X tăng dần (trái sang phải)
+          items.sort((a, b) => {
+            const yA = a.transform ? a.transform[5] : 0;
+            const yB = b.transform ? b.transform[5] : 0;
+            if (Math.abs(yA - yB) > 5) {
+              return yB - yA;
+            }
+            const xA = a.transform ? a.transform[4] : 0;
+            const xB = b.transform ? b.transform[4] : 0;
+            return xA - xB;
+          });
+
+          let currentY = null;
+          let currentLine = [];
+
+          for (const it of items) {
+            const str = (it.str || "").trim();
+            if (!str) continue;
+            const y = it.transform ? it.transform[5] : 0;
+
+            if (currentY === null || Math.abs(y - currentY) > 5) {
+              if (currentLine.length > 0) allLines.push(currentLine.join(" "));
+              currentY = y;
+              currentLine = [str];
+            } else {
+              currentLine.push(str);
+            }
+          }
+          if (currentLine.length > 0) allLines.push(currentLine.join(" "));
+        }
+
+        return allLines.join("\n");
+      }
+
+      // 3. File Word DOCX: Dùng JSZip
+      if (ext === 'docx') {
+        if (!window.JSZip) {
+          throw new Error("Thư viện JSZip chưa tải xong.");
+        }
+        const arrayBuffer = await file.arrayBuffer();
+        const zip = await JSZip.loadAsync(arrayBuffer);
+        const xmlFile = zip.file("word/document.xml");
+        if (!xmlFile) return "";
+
+        const xmlText = await xmlFile.async("text");
+        const parser = new DOMParser();
+        const xmlDoc = parser.parseFromString(xmlText, "text/xml");
+        const paragraphs = xmlDoc.getElementsByTagName("w:p");
+        let lines = [];
+        for (let p of paragraphs) {
+          let pText = "";
+          const texts = p.getElementsByTagName("w:t");
+          for (let t of texts) { pText += t.textContent; }
+          if (pText.trim()) lines.push(pText.trim());
+        }
+        return lines.join("\n");
+      }
+
+      // 4. File Word .doc cũ hoặc định dạng khác
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const raw = e.target.result || "";
+          // Trích xuất các chuỗi ký tự text có nghĩa từ binary
+          const clean = raw.replace(/[^\x20-\x7E\xA0-\xFF\u0100-\u024F\u1EA0-\u1EF9\n\r]/g, ' ');
+          const words = clean.split(/\s+/).filter(w => w.length > 2);
+          resolve(words.join(" "));
+        };
+        reader.onerror = () => resolve(file.name);
+        reader.readAsText(file, "latin-1");
+      });
+    }
+
+    // ================= BỘ BÓC TÁCH NGHỊ ĐỊNH 30/2020 CHUẨN XÁC CAO =================
+    function parseVietnameseDocStrict(fullText, filename) {
+      if (!fullText) fullText = "";
+      const rawLines = fullText.split(/[\r\n]+/).map(l => l.trim()).filter(Boolean);
+
+      // Tách các khối bị dính Quốc hiệu, Tiêu ngữ, Số ký hiệu
+      let lines = [];
+      for (const line of rawLines.slice(0, 50)) {
+        let l = line;
+        l = l.replace(/CỘNG\s*HÒA\s*XÃ\s*HỘI\s*CHỦ\s*NGHĨA\s*VIỆT\s*NAM/gi, '\n[QUOC_HIEU]\n');
+        l = l.replace(/Độc\s*lập\s*-\s*Tự\s*do\s*-\s*Hạnh\s*phúc/gi, '\n[TIEU_NGU]\n');
+        l = l.replace(/(Số\s*[:.]?\s*[0-9]+[^\s,]+)/gi, '\n$1\n');
+        l = l.replace(/(V\/v\s*[:.]?[^\n]+)/gi, '\n$1\n');
+        l = l.replace(/([A-Za-zÀ-ỹ\s]+,\s*ngày\s+\d+\s+tháng\s+\d+\s+năm\s+\d+)/gi, '\n$1\n');
+        lines.push(...l.split('\n').map(s => s.trim()).filter(Boolean));
+      }
+
+      // 1. BÓC TÁCH SỐ / KÝ HIỆU VĂN BẢN
+      let doc_number = "";
+      const numPatterns = [
+        /(?:Số|Số\s*ký\s*hiệu|Số\/KH|No\.?)\s*[:.]?\s*([0-9]{1,5}\s*[\/\-]\s*[A-ZĐ0-9a-z_\-]+(?:\s*[\/\-]\s*[A-ZĐ0-9a-z_\-]+)*(?:\([A-Za-z0-9\-_]+\))?)/i,
+        /\b([0-9]{1,5}\s*\/\s*[A-ZĐ]{2,10}(?:\s*-\s*[A-ZĐa-z0-9]+)+)\b/,
+        /\b([0-9]{1,5}\s*\/\s*[0-9]{4}\s*\/\s*[A-ZĐ_a-z\-]+)\b/
+      ];
+
+      for (const l of lines.slice(0, 35)) {
+        if (l.toLowerCase().includes("ngày") && l.toLowerCase().includes("tháng")) continue;
+        for (const p of numPatterns) {
+          const m = l.match(p);
+          if (m) {
+            let res = m[1].replace(/\s*\/\s*/g, '/').replace(/\s*-\s*/g, '-').trim();
+            res = res.split(/[\s,;]/)[0];
+            if (res.length >= 3 && res.includes('/')) {
+              doc_number = res;
+              break;
+            }
+          }
+        }
+        if (doc_number) break;
+      }
+
+      if (!doc_number) {
+        for (const p of numPatterns) {
+          const m = fullText.slice(0, 3000).match(p);
+          if (m) {
+            let res = m[1].replace(/\s*\/\s*/g, '/').replace(/\s*-\s*/g, '-').trim();
+            res = res.split(/[\s,;]/)[0];
+            if (res.includes('/')) { doc_number = res; break; }
+          }
+        }
+      }
+
+      // Nếu không tìm thấy, lấy từ tên file
+      if (!doc_number && filename) {
+        const fnMatch = filename.match(/([0-9]{1,5}[-_/][A-ZĐa-z0-9-_/]+)/);
+        if (fnMatch) doc_number = fnMatch[1].replace(/[-_]/g, '/');
+      }
+
+      // 2. BÓC TÁCH NGÀY THÁNG BAN HÀNH
+      let issue_date = "";
+      const dateMatch = fullText.slice(0, 3500).match(/(?:ngày|Ngày)\s+([0-9]{1,2})\s+tháng\s+([0-9]{1,2})\s+năm\s+([0-9]{4})/i);
+      if (dateMatch) {
+        const d = String(dateMatch[1]).padStart(2, '0');
+        const mo = String(dateMatch[2]).padStart(2, '0');
+        issue_date = `${dateMatch[3]}-${mo}-${d}`;
+      } else {
+        const shortDate = fullText.slice(0, 3500).match(/([0-3]?[0-9])[\/\-]([0-1]?[0-9])[\/\-]([12][0-9]{3})/);
+        if (shortDate) {
+          const d = String(shortDate[1]).padStart(2, '0');
+          const mo = String(shortDate[2]).padStart(2, '0');
+          issue_date = `${shortDate[3]}-${mo}-${d}`;
+        }
+      }
+
+      // 3. BÓC TÁCH CƠ QUAN BAN HÀNH
+      const issuerKeywords = [
+        "ỦY BAN NHÂN DÂN", "UBND", "BỘ ", "SỞ ", "TỔNG CỤC", "CỤC ", "CHI CỤC",
+        "TRƯỜNG ", "HỘI ĐỒNG", "VIỆN ", "TRUNG TÂM ", "BAN QUẢN LÝ", "CÔNG TY",
+        "TẬP ĐOÀN", "BỆNH VIỆN", "KHO BẠC", "THÀNH ỦY", "TỈNH ỦY", "QUẬN ỦY", "HUYỆN ỦY"
+      ];
+      let issuer = "";
+      let foundIssuers = [];
+
+      for (const line of lines.slice(0, 25)) {
+        const up = line.toUpperCase();
+        if (up.includes("[QUOC_HIEU]") || up.includes("[TIEU_NGU]") || up.includes("CỘNG HÒA") || up.includes("ĐỘC LẬP")) continue;
+        if (up.startsWith("SỐ:") || up.startsWith("SỐ ") || up.startsWith("V/V")) continue;
+        if (line.length < 4) continue;
+
+        for (const kw of issuerKeywords) {
+          if (up.includes(kw)) {
+            let clean = line.replace(/[|\-_*#]/g, '').trim();
+            clean = clean.split(/Số:|Ngày\s+\d+|Hà Nội|TP\.|Độc lập/i)[0].trim();
+            if (clean.length >= 4) foundIssuers.push(clean);
+            break;
+          }
+        }
+      }
+
+      if (foundIssuers.length > 0) {
+        for (let i = foundIssuers.length - 1; i >= 0; i--) {
+          if (foundIssuers[i] === foundIssuers[i].toUpperCase() && foundIssuers[i].length > 5) {
+            issuer = foundIssuers[i];
+            break;
+          }
+        }
+        if (!issuer) issuer = foundIssuers[foundIssuers.length - 1];
+      }
+
+      if (!issuer) {
+        for (const line of lines.slice(0, 10)) {
+          const up = line.toUpperCase();
+          if (line === up && line.length > 5 && !up.includes("CỘNG HÒA") && !up.includes("VIỆT NAM")) {
+            issuer = line;
+            break;
+          }
+        }
+      }
+
+      // 4. BÓC TÁCH LOẠI VĂN BẢN & TRÍCH YẾU
+      const docTypes = [
+        "Nghị quyết", "Quyết định", "Chỉ thị", "Quy chế", "Quy định",
+        "Thông báo", "Tờ trình", "Kế hoạch", "Báo cáo", "Hợp đồng",
+        "Biên bản", "Giấy mời", "Công văn"
+      ];
+      let doc_type = "Công văn";
+      let typeIndex = -1;
+
+      for (let i = 0; i < Math.min(lines.length, 30); i++) {
+        const lineUp = lines[i].toUpperCase();
+        if (lineUp.includes("ỦY BAN") || lineUp.includes("CỘNG HÒA") || lineUp.includes("BỘ ")) continue;
+
+        for (const dt of docTypes) {
+          if (lineUp === dt.toUpperCase() || lineUp.startsWith(dt.toUpperCase() + ":")) {
+            doc_type = dt;
+            typeIndex = i;
+            break;
+          }
+        }
+        if (doc_type !== "Công văn") break;
+      }
+
+      let excerpt = "";
+      const vvMatches = [
+        /(?:V\/v|V\/V|Về\s*việc|Trích\s*yếu)\s*[:.]?\s*([^\n\r]+)/i,
+        /\bV\/v\s*[:.]?\s*(.*?)(?=\s*Kính\s*gửi|\s*Điều\s*1|\s*Căn\s*cứ|$)/is,
+        /\bVề\s*việc\s*[:.]?\s*(.*?)(?=\s*Kính\s*gửi|\s*Điều\s*1|\s*Căn\s*cứ|$)/is
+      ];
+
+      for (const p of vvMatches) {
+        const m = fullText.slice(0, 3500).match(p);
+        if (m) {
+          let cand = m[1].replace(/\s+/g, ' ').trim();
+          cand = cand.split(/Kính\s*gửi|Điều\s*1|Căn\s*cứ|Nơi\s*nhận/i)[0].trim();
+          cand = cand.replace(/^[.\-_:\s]+|[.\-_:\s]+$/g, '');
+          if (cand.length > 5) {
+            if (!cand.toLowerCase().startsWith("v/v") && !cand.toLowerCase().startsWith("về việc")) {
+              cand = "V/v " + cand;
+            }
+            excerpt = cand;
+            break;
+          }
+        }
+      }
+
+      if (!excerpt && typeIndex >= 0 && typeIndex + 1 < lines.length) {
+        const nextLine = lines[typeIndex + 1].trim();
+        if (!nextLine.toUpperCase().startsWith("CĂN CỨ") && nextLine.length > 5) {
+          excerpt = nextLine.toLowerCase().startsWith("về việc") ? nextLine : "Về việc " + nextLine;
+        }
+      }
+
+      // 5. BÓC TÁCH NGƯỜI KÝ & CHỨC VỤ (35 dòng cuối)
+      const signerTitles = [
+        "CHỦ TỊCH", "PHÓ CHỦ TỊCH", "BỘ TRƯỞNG", "THỨ TRƯỞNG",
+        "GIÁM ĐỐC", "PHÓ GIÁM ĐỐC", "TỔNG GIÁM ĐỐC", "HIỆU TRƯỞNG",
+        "CHÁNH VĂN PHÒNG", "TRƯỞNG PHÒNG", "TRƯỞNG BAN", "CỤC TRƯỞNG"
+      ];
+      let signer = "";
+      const tailLines = rawLines.slice(-35);
+
+      for (let i = 0; i < tailLines.length; i++) {
+        const lineUp = tailLines[i].toUpperCase();
+        if (lineUp.includes("NƠI NHẬN")) continue;
+
+        for (const title of signerTitles) {
+          if (lineUp.includes(title)) {
+            const matchedTitle = tailLines[i].replace(/[|\-_*#]/g, '').trim();
+            for (let j = i + 1; j < Math.min(i + 8, tailLines.length); j++) {
+              const nameCandidate = tailLines[j].replace(/[()]/g, '').trim();
+              if (anyKeyword(nameCandidate.toLowerCase(), ["đã ký", "chữ ký", "ký tên", "đóng dấu", "---", "***"])) continue;
+              
+              const words = nameCandidate.split(/\s+/);
+              if (words.length >= 2 && words.length <= 5) {
+                const isCapitalized = words.every(w => w && w[0] === w[0].toUpperCase());
+                if (isCapitalized) {
+                  signer = `${nameCandidate} - ${matchedTitle}`;
+                  break;
+                }
+              }
+            }
+            if (signer) break;
+          }
+        }
+        if (signer) break;
+      }
+
+      return {
+        doc_number: doc_number || ("Số: " + filename.replace(/\.[^/.]+$/, "")),
+        issue_date: issue_date || new Date().toISOString().split('T')[0],
+        issuer: issuer || "Chưa nhận diện được cơ quan",
+        excerpt: excerpt || ("Trích yếu nội dung: " + filename.replace(/\.[^/.]+$/, "")),
+        doc_type,
+        signer: signer || "",
+        direction: "den"
+      };
+    }
+
+    function anyKeyword(str, arr) {
+      return arr.some(k => str.includes(k));
+    }
+
+    // Nạp mẫu thử nghiệm
+    function loadSampleDoc(key) {
+      const sample = SAMPLES[key];
+      if (!sample) return;
+      openUploadModal();
+      document.getElementById('uploadedFileName').innerText = sample.file_name;
+      document.getElementById('formFileName').value = sample.file_name;
+      document.getElementById('formDocNumber').value = sample.doc_number;
+      document.getElementById('formIssueDate').value = sample.issue_date;
+      document.getElementById('formIssuer').value = sample.issuer;
+      document.getElementById('formExcerpt').value = sample.excerpt;
+      document.getElementById('formDocType').value = sample.doc_type;
+      document.getElementById('formSigner').value = sample.signer || '';
+      document.getElementById('textPreviewArea').innerText = sample.raw_text;
+
+      const rad = document.querySelector(`input[name="direction"][value="${sample.direction}"]`);
+      if (rad) rad.checked = true;
+
+      document.getElementById('dropzonePrompt').classList.add('hidden');
+      document.getElementById('dropzoneSuccess').classList.remove('hidden');
+      showToast(`Đã nạp văn bản mẫu: ${sample.doc_number}`, 'success');
+    }
+
+    // Lưu văn bản vào Sổ
+    function saveDocument(e) {
+      e.preventDefault();
+      const directionRadio = document.querySelector('input[name="direction"]:checked');
+      const newDoc = {
+        id: Date.now(),
+        direction: directionRadio ? directionRadio.value : 'den',
+        doc_type: document.getElementById('formDocType').value,
+        doc_number: document.getElementById('formDocNumber').value.trim(),
+        issue_date: document.getElementById('formIssueDate').value,
+        issuer: document.getElementById('formIssuer').value.trim(),
+        excerpt: document.getElementById('formExcerpt').value.trim(),
+        signer: document.getElementById('formSigner').value.trim(),
+        status: document.getElementById('formStatus').value,
+        file_name: document.getElementById('formFileName').value || "Tai_lieu.pdf",
+        raw_text: document.getElementById('textPreviewArea').innerText || ""
+      };
+
+      currentDocuments.unshift(newDoc);
+      saveToStorage();
+      closeUploadModal();
+      loadDocuments();
+      loadStatistics();
+      showToast(`Đã lưu văn bản ${newDoc.doc_number} vào Sổ!`, 'success');
+    }
+
+    // Xem trước chi tiết văn bản đã lưu
+    function previewSavedDocument(docId) {
+      const doc = currentDocuments.find(d => d.id === docId);
+      if (!doc) return;
+
+      document.getElementById('previewModalTitle').innerText = doc.file_name || "Chi tiết văn bản";
+      document.getElementById('previewModalSub').innerText = `Số: ${doc.doc_number} | ${doc.issuer}`;
+      document.getElementById('pvDocNumber').innerText = doc.doc_number || "Chưa có";
+      document.getElementById('pvIssueDate').innerText = doc.issue_date ? formatDate(doc.issue_date) : "Chưa rõ";
+      document.getElementById('pvIssuer').innerText = doc.issuer || "Chưa rõ";
+      document.getElementById('pvExcerpt').innerText = doc.excerpt || "Chưa có";
+      document.getElementById('pvSigner').innerText = doc.signer || "Chưa rõ";
+      document.getElementById('pvDocType').innerText = doc.doc_type || "Công văn";
+      document.getElementById('pvRawText').innerText = doc.raw_text || "(Không có bản lưu nội dung text)";
+
+      document.getElementById('previewDocModal').classList.remove('hidden');
+    }
+
+    function closeDocPreviewModal() {
+      document.getElementById('previewDocModal').classList.add('hidden');
+    }
+
+    // Xóa văn bản
+    function deleteDocPrompt(docId, docNumber) {
+      if (!confirm(`Bạn có chắc muốn xóa văn bản "${docNumber}" khỏi sổ không?`)) return;
+      currentDocuments = currentDocuments.filter(d => d.id !== docId);
+      saveToStorage();
+      loadDocuments();
+      loadStatistics();
+      showToast(`Đã xóa văn bản khỏi hệ thống`, 'info');
+    }
+
+    // Xuất CSV chuẩn tiếng Việt (UTF-8 BOM)
+    function exportCSV() {
+      let filtered = currentDocuments;
+      if (currentTab !== 'all') filtered = filtered.filter(d => d.direction === currentTab);
+      let csvContent = "\uFEFF";
+      csvContent += "ID,Chiều,Số / Ký hiệu,Ngày ban hành,Cơ quan ban hành,Loại văn bản,Trích yếu nội dung,Người ký,Trạng thái\n";
+
+      filtered.forEach(d => {
+        const dir = d.direction === 'den' ? 'Văn bản đến' : 'Văn bản đi';
+        const st = { 'pending': 'Chờ xử lý', 'processing': 'Đang xử lý', 'completed': 'Hoàn thành' }[d.status] || d.status;
+        csvContent += `"${d.id}","${dir}","${d.doc_number || ''}","${d.issue_date || ''}","${(d.issuer || '').replace(/"/g, '""')}","${d.doc_type || ''}","${(d.excerpt || '').replace(/"/g, '""')}","${d.signer || ''}","${st}"\n`;
+      });
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `so_van_ban_${currentTab}_${new Date().toISOString().split('T')[0]}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    }
+
+    // Toast
+    function showToast(text, type = 'info') {
+      const toast = document.getElementById('toastMessage');
+      const toastText = document.getElementById('toastText');
+      const toastIcon = document.getElementById('toastIcon');
+      toastText.innerText = text;
+      toastIcon.innerHTML = type === 'success' 
+        ? '<i class="fa-solid fa-circle-check text-emerald-400 text-base"></i>'
+        : '<i class="fa-solid fa-circle-info text-blue-400 text-base"></i>';
+      toast.classList.remove('hidden');
+      setTimeout(() => { toast.classList.add('hidden'); }, 3500);
+    }
+
+    function formatDate(dateStr) {
+      if (!dateStr) return '';
+      const parts = dateStr.split('-');
+      if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+      return dateStr;
+    }
+
+    function escapeHtml(str) {
+      if (!str) return '';
+      return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+    }
+  </script>
+</body>
+</html>
